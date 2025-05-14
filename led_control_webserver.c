@@ -15,6 +15,7 @@
 #define WIFI_SSID "SEU_SSID"
 #define WIFI_PASSWORD "SUA_SENHA"
 #define LED_PIN CYW43_WL_GPIO_LED_PIN   // GPIO do CI CYW43
+#include "senhas.c"
 
 void gpioPwmInit(int); // Inicializar os Pinos GPIO para acionamento dos LEDs da BitDogLab
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err); // Função de callback ao aceitar conexões TCP
@@ -117,9 +118,11 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err) {
 // Tratamento do request do usuário - digite aqui
 void user_request(char **request) {
     static int ledIntensity = 65535; // Variável estática para armazenar a intensidade do LED
-    static bool ledState = false;
+    static bool ledState = false; // Variável estática para indicar se o led está ligado
 
+    // Entra nesse if se o request for para aumentar a intensidade do LED
     if (strstr(*request, "GET /more_brightness") != NULL) {
+        // Verifica se a intensidade do LED é menor que 90% do valor de wrap pra garantir que n daremos overflow no mesmo, e se o LED está ligado
         if(ledIntensity <= 65535-65535/10 && ledState == true) {
             ledIntensity += 65535/10; // Aumenta a intensidade do LED
             pwm_set_gpio_level(13, ledIntensity); // 0 graus
@@ -127,7 +130,9 @@ void user_request(char **request) {
             pwm_set_gpio_level(11, ledIntensity); // 0 graus
             printf("Intensidade do LED: %d\n", ledIntensity);
         }
+    // Entra nesse if se o request for para diminuir a intensidade do LED
     } else if (strstr(*request, "GET /less_brightness") != NULL) {
+        // Verifica se a intensidade do LED é maior que 10% do valor de wrap pra garantir que n teremos valores < 0 no mesmo, e se o LED está ligado
         if(ledIntensity >= 65535/10 && ledState == true) {
             ledIntensity -= 65400/10; // Diminui a intensidade do LED
             pwm_set_gpio_level(13, ledIntensity); // 0 graus
@@ -135,7 +140,9 @@ void user_request(char **request) {
             pwm_set_gpio_level(11, ledIntensity); // 0 graus
             printf("Intensidade do LED: %d\n", ledIntensity);
         }
+    // Entra nesse if se o request for para ligar o LED
     } else if (strstr(*request, "GET /light_on") != NULL) {
+        // Verifica se o LED está desligado para poder ligá-lo
         if(ledState == false) {
             pwm_set_gpio_level(13, 65535); // 90 graus
             pwm_set_gpio_level(12, 63535); // 90 graus
@@ -144,7 +151,9 @@ void user_request(char **request) {
             ledIntensity = 65535; // Reseta a intensidade do LED
             printf("Intensidade do LED: %d\n", ledIntensity);
         }
+    // Entra nesse if se o request for para desligar o LED
     } else if (strstr(*request, "GET /light_off") != NULL) {
+        // Verifica se o LED está ligado para poder desligá-lo
         if(ledState == true) {
             pwm_set_gpio_level(13, 0); // 90 graus
             pwm_set_gpio_level(12, 0); // 90 graus
