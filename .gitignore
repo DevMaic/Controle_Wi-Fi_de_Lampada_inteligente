@@ -1,0 +1,4 @@
+.vscode
+build
+senhas.c
+pico_sdk_import.cmake
