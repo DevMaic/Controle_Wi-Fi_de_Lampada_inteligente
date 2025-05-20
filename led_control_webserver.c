@@ -2,6 +2,15 @@
 #include <string.h>              // Biblioteca manipular strings
 #include <stdlib.h>              // funções para realizar várias operações, incluindo alocação de memória dinâmica (malloc)
 
+#include "hardware/i2c.h"
+// #include "hardware/clocks.h"
+#include "lib/ssd1306.h"
+#include "lib/font.h"
+#define I2C_PORT i2c1
+#define I2C_SDA 14
+#define I2C_SCL 15
+#define endereco 0x3C
+
 #include "pico/stdlib.h"         // Biblioteca da Raspberry Pi Pico para funções padrão (GPIO, temporização, etc.)
 #include "hardware/adc.h"        // Biblioteca da Raspberry Pi Pico para manipulação do conversor ADC
 #include "hardware/pwm.h"         // Biblioteca da Raspberry Pi Pico para manipulação de PWM (modulação por largura de pulso)
@@ -27,6 +36,22 @@ int main() {
     //Inicializa todos os tipos de bibliotecas stdio padrão presentes que estão ligados ao binário.
     stdio_init_all();
 
+    // I2C Initialisation. Using it at 400Khz.
+    i2c_init(I2C_PORT, 400 * 1000);
+
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);                    // Set the GPIO pin function to I2C
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);                    // Set the GPIO pin function to I2C
+    gpio_pull_up(I2C_SDA);                                        // Pull up the data line
+    gpio_pull_up(I2C_SCL);                                        // Pull up the clock line
+    ssd1306_t ssd;                                                // Inicializa a estrutura do display
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
+    ssd1306_config(&ssd);                                         // Configura o display
+    ssd1306_send_data(&ssd);                                      // Envia os dados para o display
+
+    // Limpa o display. O display inicia com todos os pixels apagados.
+    ssd1306_fill(&ssd, false);
+    ssd1306_send_data(&ssd);
+
     // Inicializar os Pinos GPIO para acionamento dos LEDs da BitDogLab
     gpioPwmInit(11);
     gpioPwmInit(12);
@@ -34,9 +59,9 @@ int main() {
 
     //Inicializa a arquitetura do cyw43
     while (cyw43_arch_init()) {
-        printf("Falha ao inicializar Wi-Fi\n");
+        ssd1306_draw_string(&ssd, "Falha ao inicializar Wi-Fi\n", 0, 0);
         sleep_ms(100);
-        return -1;
+        // return -1;
     }
 
     // GPIO do CI CYW43 em nível baixo
@@ -46,29 +71,41 @@ int main() {
     cyw43_arch_enable_sta_mode();
 
     // Conectar à rede WiFI - fazer um loop até que esteja conectado
-    printf("Conectando ao Wi-Fi...\n");
+    ssd1306_draw_string(&ssd, "Conectando WiFi\n", 0, 0);
+    ssd1306_send_data(&ssd); // Envia os dados para o display
     while (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 20000)) {
-        printf("Falha ao conectar ao Wi-Fi\n");
+        ssd1306_draw_string(&ssd, "Falha no WiFi\n", 0, 0);
+        ssd1306_send_data(&ssd); // Envia os dados para o display
         sleep_ms(100);
-        return -1; // Encerra o programa se não conseguir conectar de primeira, péssimo para o usuário, mas Ricardo Exigiu
+        // return -1; // Encerra o programa se não conseguir conectar de primeira, péssimo para o usuário, mas Ricardo Exigiu
     }
-    printf("Conectado ao Wi-Fi\n");
+    ssd1306_draw_string(&ssd, "WiFi conectado\n", 0, 12);
+    ssd1306_send_data(&ssd); // Envia os dados para o display
 
     // Caso seja a interface de rede padrão - imprimir o IP do dispositivo.
     if (netif_default) {
-        printf("IP do dispositivo: %s\n", ipaddr_ntoa(&netif_default->ip_addr));
+        printf("IP do dispositivo: %s\n", ipaddr_ntoa(&netif_default->ip_addr)); // Imprime o IP do dispositivo
+        char str[50];
+        sprintf(str, "%s\n", ipaddr_ntoa(&netif_default->ip_addr)); // Formata a string com o IP
+        ssd1306_draw_string(&ssd, "IP atual: ", 0, 24); // Desenha a string no display
+        ssd1306_draw_string(&ssd, str, 0, 36);
+        ssd1306_send_data(&ssd); // Envia os dados para o display
     }
 
     // Configura o servidor TCP - cria novos PCBs TCP. É o primeiro passo para estabelecer uma conexão TCP.
     struct tcp_pcb *server = tcp_new();
     if (!server) {
         printf("Falha ao criar servidor TCP\n");
+        ssd1306_draw_string(&ssd, "Falha ao criar servidor TCP\n", 0, 0);
+        ssd1306_send_data(&ssd); // Envia os dados para o display
         return -1;
     }
 
     //vincula um PCB (Protocol Control Block) TCP a um endereço IP e porta específicos.
     if (tcp_bind(server, IP_ADDR_ANY, 80) != ERR_OK) {
         printf("Falha ao associar servidor TCP à porta 80\n");
+        ssd1306_draw_string(&ssd, "Falha ao associar servidor TCP à porta 80\n", 0, 0);
+        ssd1306_send_data(&ssd); // Envia os dados para o display
         return -1;
     }
 
@@ -78,6 +115,8 @@ int main() {
     // Define uma função de callback para aceitar conexões TCP de entrada. É um passo importante na configuração de servidores TCP.
     tcp_accept(server, tcp_server_accept);
     printf("Servidor ouvindo na porta 80\n");
+    // ssd1306_draw_string(&ssd, "Servidor ouvindo na porta 80\n", 0, 0);
+    // ssd1306_send_data(&ssd); // Envia os dados para o display
 
     // Inicializa o conversor ADC
     adc_init();
