@@ -24,7 +24,8 @@
 #define WIFI_SSID "SEU_SSID"
 #define WIFI_PASSWORD "SUA_SENHA"
 #define LED_PIN CYW43_WL_GPIO_LED_PIN   // GPIO do CI CYW43
-#include "senhas.c"
+
+ssd1306_t ssd;                                                // Inicializa a estrutura do display
 
 void gpioPwmInit(int); // Inicializar os Pinos GPIO para acionamento dos LEDs da BitDogLab
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err); // Função de callback ao aceitar conexões TCP
@@ -43,7 +44,6 @@ int main() {
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);                    // Set the GPIO pin function to I2C
     gpio_pull_up(I2C_SDA);                                        // Pull up the data line
     gpio_pull_up(I2C_SCL);                                        // Pull up the clock line
-    ssd1306_t ssd;                                                // Inicializa a estrutura do display
     ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
     ssd1306_config(&ssd);                                         // Configura o display
     ssd1306_send_data(&ssd);                                      // Envia os dados para o display
@@ -86,9 +86,8 @@ int main() {
     if (netif_default) {
         printf("IP do dispositivo: %s\n", ipaddr_ntoa(&netif_default->ip_addr)); // Imprime o IP do dispositivo
         char str[50];
-        sprintf(str, "%s\n", ipaddr_ntoa(&netif_default->ip_addr)); // Formata a string com o IP
-        ssd1306_draw_string(&ssd, "IP atual: ", 0, 24); // Desenha a string no display
-        ssd1306_draw_string(&ssd, str, 0, 36);
+        sprintf(str, "IP%s\n", ipaddr_ntoa(&netif_default->ip_addr)); // Formata a string com o IP
+        ssd1306_draw_string(&ssd, str, 0, 24); // Desenha a string no display
         ssd1306_send_data(&ssd); // Envia os dados para o display
     }
 
@@ -115,8 +114,6 @@ int main() {
     // Define uma função de callback para aceitar conexões TCP de entrada. É um passo importante na configuração de servidores TCP.
     tcp_accept(server, tcp_server_accept);
     printf("Servidor ouvindo na porta 80\n");
-    // ssd1306_draw_string(&ssd, "Servidor ouvindo na porta 80\n", 0, 0);
-    // ssd1306_send_data(&ssd); // Envia os dados para o display
 
     // Inicializa o conversor ADC
     adc_init();
@@ -173,7 +170,7 @@ void user_request(char **request) {
     } else if (strstr(*request, "GET /less_brightness") != NULL) {
         // Verifica se a intensidade do LED é maior que 10% do valor de wrap pra garantir que n teremos valores < 0 no mesmo, e se o LED está ligado
         if(ledIntensity >= 65535/10 && ledState == true) {
-            ledIntensity -= 65400/10; // Diminui a intensidade do LED
+            ledIntensity -= 65535/10; // Diminui a intensidade do LED
             pwm_set_gpio_level(13, ledIntensity); // 0 graus
             pwm_set_gpio_level(12, ledIntensity); // 0 graus
             pwm_set_gpio_level(11, ledIntensity); // 0 graus
@@ -202,6 +199,25 @@ void user_request(char **request) {
             printf("Intensidade do LED: %d\n", ledIntensity);
         }
     }
+
+    // Exibe o nível de brilho atual da lâmpada
+    ssd1306_draw_string(&ssd, "[", 5, 48);
+    ssd1306_send_data(&ssd); // Envia os dados para o display
+    for(int i = 0; i < 10; i++) { // Limpa o buffer do display
+        // ledIntensity/65535.0) calcula a porcentagem atual de brilho
+        // isso *10 indica quantos dos 10 níveis devemos desenhar
+        // No que falta pra completar 10, entramos no else e desenhamos um espaço
+        if(i<(int)((ledIntensity/65535.0)*10)) {
+            // i*10+15 simboliza que desenharemos um - a cada 10pixels e tudo isso começando a 15 pixels da borda  
+            ssd1306_draw_char(&ssd, '-', (i*10+15), 48);
+            ssd1306_send_data(&ssd); // Envia os dados para o display
+        } else {
+            ssd1306_draw_char(&ssd, ' ', (i*10+15), 48);
+            ssd1306_send_data(&ssd); // Envia os dados para o display
+        }
+    }
+    ssd1306_draw_string(&ssd, "]", 115, 48); // Desenha a string no display
+    ssd1306_send_data(&ssd);
 };
 
 // Função de callback para processar requisições HTTP
@@ -235,7 +251,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         "<head>\n"
         "<title>EmbarcaTech - Smart Light</title>\n"
         "<style>\n"
-        "body { background-color: #b5e5fb; font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }\n"
+        "body { background-color:rgb(116, 116, 116); font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }\n"
         "h1 { font-size: 64px; margin-bottom: 30px; }\n"
         "button { background-color: LightGray; font-size: 36px; margin: 10px; padding: 20px 40px; border-radius: 10px; }\n"
         ".temperature { font-size: 48px; margin-top: 30px; color: #333; }\n"
